@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELV · Employee Lifetime Value</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">
+      <span class="logo-icon">◈</span>
+      <span class="logo-text">ELV</span>
+    </div>
+    <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+
+  <ul class="nav-links">
+    <li><a href="#" class="nav-link active" data-page="dashboard"><i class="nav-icon">⊡</i> Dashboard</a></li>
+    <li><a href="#" class="nav-link" data-page="employees"><i class="nav-icon">⊕</i> Employees</a></li>
+    <li><a href="#" class="nav-link" data-page="monthly"><i class="nav-icon">◷</i> Monthly Tracker</a></li>
+    <li><a href="#" class="nav-link" data-page="kpi-entry"><i class="nav-icon">✎</i> KPI Entry</a></li>
+    <li><a href="#" class="nav-link" data-page="reports"><i class="nav-icon">▤</i> Reports</a></li>
+  </ul>
+
+  <div class="sidebar-footer">
+    <div class="db-status" id="dbStatus">
+      <span class="status-dot offline"></span>
+      <span class="status-label">Not connected</span>
+    </div>
+    <button class="btn-settings" id="openSettings">⚙ Settings</button>
+  </div>
+</nav>
+
+<main class="main-content" id="mainContent">
+  <div id="page-dashboard" class="page active">
+    <div class="page-header">
+      <div>
+        <h1>Dashboard</h1>
+        <p class="page-subtitle" id="dashboardSubtitle">Loading...</p>
+      </div>
+      <div class="header-actions">
+        <select id="dashboardMonth" class="select-control">
+          <option value="">Select month</option>
+        </select>
+        <select id="dashboardEmployee" class="select-control">
+          <option value="">All employees</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="stat-grid" id="statGrid">
+      <div class="stat-card">
+        <p class="stat-label">Avg. Monthly Score</p>
+        <p class="stat-value" id="statAvgScore">—</p>
+        <p class="stat-sub" id="statAvgScoreSub">across employees</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Top Performer</p>
+        <p class="stat-value sm" id="statTopPerformer">—</p>
+        <p class="stat-sub" id="statTopScore">this period</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Active Work Days</p>
+        <p class="stat-value" id="statWorkDays">—</p>
+        <p class="stat-sub">days logged</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">KPI Entries</p>
+        <p class="stat-value" id="statKpiCount">—</p>
+        <p class="stat-sub">total records</p>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card wide">
+        <div class="chart-header">
+          <h3>Monthly performance trend</h3>
+          <span class="chart-legend" id="trendLegend"></span>
+        </div>
+        <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><h3>KPI breakdown</h3></div>
+        <div class="chart-wrap"><canvas id="kpiRadar"></canvas></div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-header">
+        <h3>Employee summary</h3>
+        <input type="text" id="empSearch" class="search-input" placeholder="Search employees...">
+      </div>
+      <div class="table-wrap">
+        <table id="empTable">
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Branch</th>
+              <th>Apr Score</th>
+              <th>May Score</th>
+              <th>Jun Score</th>
+              <th>Avg (YTD)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="empTableBody">
+            <tr><td colspan="7" class="loading-row">Loading data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-employees" class="page">
+    <div class="page-header">
+      <div><h1>Employees</h1><p class="page-subtitle">Manage IT staff records</p></div>
+      <button class="btn-primary" id="addEmployeeBtn">+ Add Employee</button>
+    </div>
+
+    <div class="employee-grid" id="employeeGrid">
+      <p class="loading-text">Loading employees...</p>
+    </div>
+
+    <div class="modal-overlay hidden" id="employeeModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="empModalTitle">Add Employee</h3>
+          <button class="modal-close" id="closeEmpModal">✕</button>
+        </div>
+        <form id="employeeForm" class="form">
+          <input type="hidden" id="empId">
+          <div class="form-group">
+            <label>Full name</label>
+            <input type="text" id="empName" placeholder="e.g. Argie Sacedon" required>
+          </div>
+          <div class="form-group">
+            <label>Branch / Location</label>
+            <input type="text" id="empBranch" placeholder="e.g. Maribago">
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="cancelEmpModal">Cancel</button>
+            <button type="submit" class="btn-primary">Save Employee</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-monthly" class="page">
+    <div class="page-header">
+      <div><h1>Monthly Tracker</h1><p class="page-subtitle">View & edit monthly performance summaries</p></div>
+      <div class="header-actions">
+        <select id="monthlyEmpFilter" class="select-control">
+          <option value="">All employees</option>
+        </select>
+        <select id="monthlyMonthFilter" class="select-control">
+          <option value="">All months</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="monthly-grid" id="monthlyGrid">
+      <p class="loading-text">Loading monthly data...</p>
+    </div>
+
+    <div class="modal-overlay hidden" id="monthlyModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="monthlyModalTitle">Monthly Summary</h3>
+          <button class="modal-close" id="closeMonthlyModal">✕</button>
+        </div>
+        <form id="monthlyForm" class="form">
+          <input type="hidden" id="monthlyId">
+          <input type="hidden" id="monthlyEmpId">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Employee</label>
+              <select id="monthlyEmpSelect" class="select-control full" required></select>
+            </div>
+            <div class="form-group">
+              <label>Month / Year</label>
+              <select id="monthlyMonthSelect" class="select-control full" required>
+                <option value="2026-01">January 2026</option>
+                <option value="2026-02">February 2026</option>
+                <option value="2026-03">March 2026</option>
+                <option value="2026-04">April 2026</option>
+                <option value="2026-05">May 2026</option>
+                <option value="2026-06">June 2026</option>
+                <option value="2026-07">July 2026</option>
+                <option value="2026-08">August 2026</option>
+                <option value="2026-09">September 2026</option>
+                <option value="2026-10">October 2026</option>
+                <option value="2026-11">November 2026</option>
+                <option value="2026-12">December 2026</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Average Score (%)</label>
+              <input type="number" id="monthlyScore" min="0" max="200" step="0.01" placeholder="e.g. 95.34">
+            </div>
+            <div class="form-group">
+              <label>Bonus Points</label>
+              <input type="number" id="monthlyBonus" min="0" step="0.01" placeholder="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Amuma Behavior</label>
+              <input type="number" id="monthlyAmuma" min="0" step="0.01" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label>Deduction</label>
+              <input type="number" id="monthlyDeduction" min="0" step="0.01" placeholder="0">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="monthlyZeroTolerance"> Zero Tolerance Violation
+            </label>
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea id="monthlyNotes" rows="2" placeholder="Optional notes..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="cancelMonthlyModal">Cancel</button>
+            <button type="submit" class="btn-primary">Save Summary</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-kpi-entry" class="page">
+    <div class="page-header">
+      <div><h1>KPI Entry</h1><p class="page-subtitle">Log daily KPI scores for each employee</p></div>
+    </div>
+
+    <div class="kpi-form-card">
+      <form id="kpiForm" class="form">
+        <div class="form-row three">
+          <div class="form-group">
+            <label>Employee</label>
+            <select id="kpiEmployee" class="select-control full" required>
+              <option value="">Select employee</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" id="kpiDate" required>
+          </div>
+          <div class="form-group">
+            <label>Shift</label>
+            <input type="text" id="kpiShift" placeholder="e.g. 08:00 AM - 04:00 PM">
+          </div>
+        </div>
+
+        <div id="kpiRowsContainer">
+          <div class="kpi-rows-header">
+            <span>KPI</span><span>Weight</span><span>Target</span><span>Actual</span><span>% Achieved</span><span>Wtd Value</span><span></span>
+          </div>
+          <div id="kpiRows"></div>
+        </div>
+
+        <button type="button" class="btn-add-row" id="addKpiRow">+ Add KPI row</button>
+
+        <div class="kpi-totals">
+          <span>Total weighted value: <strong id="kpiTotalWV">0.00</strong></span>
+          <span>Score: <strong id="kpiScore">0.00%</strong></span>
+        </div>
+
+        <div class="form-group">
+          <label>Day notes / bonus remarks</label>
+          <input type="text" id="kpiNotes" placeholder="Optional: special recognition, bonus, etc.">
+        </div>
+        <div class="form-actions">
+          <button type="reset" class="btn-secondary">Clear</button>
+          <button type="submit" class="btn-primary">Save KPI Entry</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="table-card" style="margin-top: 2rem;">
+      <div class="table-header">
+        <h3>Recent entries</h3>
+        <div class="header-actions">
+          <select id="recentEmpFilter" class="select-control">
+            <option value="">All employees</option>
+          </select>
+          <input type="month" id="recentMonthFilter" class="select-control">
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="recentTable">
+          <thead>
+            <tr><th>Date</th><th>Employee</th><th>KPI</th><th>Target</th><th>Actual</th><th>Weighted</th><th></th></tr>
+          </thead>
+          <tbody id="recentTableBody">
+            <tr><td colspan="7" class="loading-row">Loading entries...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-reports" class="page">
+    <div class="page-header">
+      <div><h1>Reports</h1><p class="page-subtitle">Analytics & performance insights</p></div>
+      <div class="header-actions">
+        <select id="reportEmployee" class="select-control">
+          <option value="">All employees</option>
+        </select>
+        <select id="reportYear" class="select-control">
+          <option value="2026">2026</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card wide">
+        <div class="chart-header"><h3>Full-year performance</h3></div>
+        <div class="chart-wrap tall"><canvas id="yearChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><h3>KPI weight distribution</h3></div>
+        <div class="chart-wrap"><canvas id="weightChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-header"><h3>Monthly breakdown</h3></div>
+      <div class="table-wrap">
+        <table id="reportTable">
+          <thead>
+            <tr><th>Month</th><th>Employee</th><th>Avg Score</th><th>Bonus</th><th>Amuma</th><th>Deduction</th><th>Final</th><th>Status</th></tr>
+          </thead>
+          <tbody id="reportTableBody">
+            <tr><td colspan="8" class="loading-row">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="modal-overlay hidden" id="settingsModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Supabase Settings</h3>
+      <button class="modal-close" id="closeSettings">✕</button>
+    </div>
+    <form id="settingsForm" class="form">
+      <div class="form-group">
+        <label>Supabase URL</label>
+        <input type="url" id="supabaseUrl" placeholder="https://xxxxx.supabase.co">
+      </div>
+      <div class="form-group">
+        <label>Supabase Anon Key</label>
+        <input type="text" id="supabaseKey" placeholder="eyJ...">
+      </div>
+      <div class="info-box">
+        <p>Your keys are stored in <strong>localStorage</strong> only. Never share your anon key publicly.</p>
+        <p style="margin-top:8px">After connecting, run the SQL schema in <code>supabase_schema.sql</code> in your Supabase SQL editor.</p>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-secondary" id="cancelSettings">Cancel</button>
+        <button type="submit" class="btn-primary">Connect & Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+
+</body>
+</html>
